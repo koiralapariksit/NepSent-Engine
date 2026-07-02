@@ -1,0 +1,78 @@
+{
+  "models": {
+    "08a_tfidf": {
+      "model_name": "TF-IDF",
+      "level": 1,
+      "target_range": "55-65%",
+      "accuracy": 0.4117647058823529,
+      "macro_f1": 0.38888888888888884,
+      "macro_precision": 0.41111111111111115,
+      "macro_recall": 0.41111111111111115,
+      "cross_domain_f1": 0.3
+    },
+    "08b_fasttext": {
+      "model_name": "fastText",
+      "level": 2,
+      "target_range": "63-72%",
+      "accuracy": 0.47058823529411764,
+      "macro_f1": 0.45714285714285713,
+      "macro_precision": 0.45,
+      "macro_recall": 0.4777777777777777,
+      "cross_domain_f1": 0.35714285714285715
+    },
+    "08c_mbert": {
+      "model_name": "mBERT",
+      "level": 3,
+      "target_range": "74-82%",
+      "accuracy": 0.5882352941176471,
+      "macro_f1": 0.5305322128851541,
+      "macro_precision": 0.7151515151515152,
+      "macro_recall": 0.5888888888888889,
+      "cross_domain_f1": 0.5222222222222223
+    },
+    "08d_muril": {
+      "model_name": "MuRIL",
+      "level": 4,
+      "target_range": "79-86%",
+      "accuracy": 0.5294117647058824,
+      "macro_f1": 0.5111111111111111,
+      "macro_precision": 0.49603174603174605,
+      "macro_recall": 0.5444444444444444,
+      "cross_domain_f1": 0.43333333333333335
+    }
+  },
+  "ranking": [
+    {
+      "rank": 1,
+      "model_key": "08c_mbert",
+      "model_name": "mBERT",
+      "level": 3,
+      "macro_f1": 0.5305322128851541,
+      "cross_domain_f1": 0.5222222222222223
+    },
+    {
+      "rank": 2,
+      "model_key": "08d_muril",
+      "model_name": "MuRIL",
+      "level": 4,
+      "macro_f1": 0.5111111111111111,
+      "cross_domain_f1": 0.43333333333333335
+    },
+    {
+      "rank": 3,
+      "model_key": "08b_fasttext",
+      "model_name": "fastText",
+      "level": 2,
+      "macro_f1": 0.45714285714285713,
+      "cross_domain_f1": 0.35714285714285715
+    },
+    {
+      "rank": 4,
+      "model_key": "08a_tfidf",
+      "model_name": "TF-IDF",
+      "level": 1,
+      "macro_f1": 0.38888888888888884,
+      "cross_domain_f1": 0.3
+    }
+  ]
+}

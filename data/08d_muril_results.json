@@ -1,0 +1,88 @@
+{
+  "accuracy": 0.5294117647058824,
+  "macro_f1": 0.5111111111111111,
+  "macro_precision": 0.49603174603174605,
+  "macro_recall": 0.5444444444444444,
+  "confusion_matrix": [
+    [
+      1,
+      3,
+      2
+    ],
+    [
+      1,
+      4,
+      0
+    ],
+    [
+      2,
+      0,
+      4
+    ]
+  ],
+  "per_class": {
+    "Negative": {
+      "precision": 0.25,
+      "recall": 0.16666666666666666,
+      "f1": 0.2,
+      "support": 6
+    },
+    "Positive": {
+      "precision": 0.5714285714285714,
+      "recall": 0.8,
+      "f1": 0.6666666666666666,
+      "support": 5
+    },
+    "Neutral": {
+      "precision": 0.6666666666666666,
+      "recall": 0.6666666666666666,
+      "f1": 0.6666666666666666,
+      "support": 6
+    }
+  },
+  "classification_report": "              precision    recall  f1-score   support\n\n    Negative       0.25      0.17      0.20         6\n    Positive       0.57      0.80      0.67         5\n     Neutral       0.67      0.67      0.67         6\n\n    accuracy                           0.53        17\n   macro avg       0.50      0.54      0.51        17\nweighted avg       0.49      0.53      0.50        17\n",
+  "cross_domain": {
+    "accuracy": 0.5,
+    "macro_f1": 0.43333333333333335,
+    "macro_precision": 0.3333333333333333,
+    "macro_recall": 0.6666666666666666,
+    "confusion_matrix": [
+      [
+        0,
+        2,
+        1
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        2
+      ]
+    ],
+    "per_class": {
+      "Negative": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 3
+      },
+      "Positive": {
+        "precision": 0.3333333333333333,
+        "recall": 1.0,
+        "f1": 0.5,
+        "support": 1
+      },
+      "Neutral": {
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.8,
+        "support": 2
+      }
+    },
+    "classification_report": "              precision    recall  f1-score   support\n\n    Negative       0.00      0.00      0.00         3\n    Positive       0.33      1.00      0.50         1\n     Neutral       0.67      1.00      0.80         2\n\n    accuracy                           0.50         6\n   macro avg       0.33      0.67      0.43         6\nweighted avg       0.28      0.50      0.35         6\n"
+  }
+}

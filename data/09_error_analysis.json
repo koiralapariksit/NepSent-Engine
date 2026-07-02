@@ -1,0 +1,83 @@
+{
+  "dataset_summary": {
+    "dataset_file": "d:\\ds mdoel\\data\\04_annotated_dataset.jsonl",
+    "total_sentences": 109,
+    "label_distribution": {
+      "Negative": 36,
+      "Positive": 36,
+      "Neutral": 37
+    }
+  },
+  "overall_findings": [
+    "The project successfully executed four benchmark levels, generating a full comparison file and per-model metrics."
+  ],
+  "model_analysis": {
+    "TF-IDF": {
+      "accuracy": 0.4117647058823529,
+      "macro_f1": 0.38888888888888884,
+      "macro_precision": 0.41111111111111115,
+      "macro_recall": 0.41111111111111115,
+      "cross_domain_f1": 0.3,
+      "key_findings": [
+        "Macro F1 remains below 0.50, indicating the model is underfitting or the dataset is too small for reliable generalization.",
+        "TF-IDF shows the weakest neutral handling and high confusion on fine-grained sentiment signals.",
+        "Cross-domain macro F1 is 0.3000, which shows domain transfer is challenging for TF-IDF."
+      ]
+    },
+    "fastText": {
+      "accuracy": 0.47058823529411764,
+      "macro_f1": 0.45714285714285713,
+      "macro_precision": 0.45,
+      "macro_recall": 0.4777777777777777,
+      "cross_domain_f1": 0.35714285714285715,
+      "key_findings": [
+        "Macro F1 remains below 0.50, indicating the model is underfitting or the dataset is too small for reliable generalization.",
+        "fastText improves over TF-IDF but still struggles with negative sentiment recall, likely due to limited negative examples and lexical ambiguity.",
+        "Cross-domain macro F1 is 0.3571, which shows domain transfer is challenging for fastText."
+      ]
+    },
+    "mBERT": {
+      "accuracy": 0.5882352941176471,
+      "macro_f1": 0.5305322128851541,
+      "macro_precision": 0.7151515151515152,
+      "macro_recall": 0.5888888888888889,
+      "cross_domain_f1": 0.5222222222222223,
+      "key_findings": [
+        "mBERT achieves the best overall macro F1, but negative sentiment remains a low-recall class.",
+        "Cross-domain macro F1 is 0.5222, which shows domain transfer is challenging for mBERT."
+      ]
+    },
+    "MuRIL": {
+      "accuracy": 0.5294117647058824,
+      "macro_f1": 0.5111111111111111,
+      "macro_precision": 0.49603174603174605,
+      "macro_recall": 0.5444444444444444,
+      "cross_domain_f1": 0.43333333333333335,
+      "key_findings": [
+        "MuRIL delivers the most balanced neutral recall but still underperforms on negative sentiment in the current dataset.",
+        "Cross-domain macro F1 is 0.4333, which shows domain transfer is challenging for MuRIL."
+      ]
+    }
+  },
+  "common_failure_modes": [
+    {
+      "type": "Negative Sentiment Under-recall",
+      "description": "All models show poor recall for negative sentiment compared to positive and neutral classes, indicating that the dataset and model training prioritize neutral/positive patterns."
+    },
+    {
+      "type": "Domain Transfer Instability",
+      "description": "Cross-domain evaluation reveals that models trained on news_politics do not fully generalize to e-commerce and social media text. This suggests the need for more diverse, cross-domain training samples."
+    },
+    {
+      "type": "Neutral vs. Sentiment Confusion",
+      "description": "TF-IDF and fastText are especially weak at distinguishing neutral statements from opinionated text, which is common in Nepali social media."
+    }
+  ],
+  "recommendations": [
+    "Expand the dataset size to improve generalization; < 200 samples is a severe data constraint.",
+    "Collect more negative and neutral examples, especially from social media and e-commerce domains.",
+    "Add targeted data augmentation for negation, sarcasm, and Nepali code-switching.",
+    "Use domain adaptation or multi-domain fine-tuning to reduce cross-domain performance gaps.",
+    "Evaluate larger models and curriculum training once more labeled data is available."
+  ]
+}

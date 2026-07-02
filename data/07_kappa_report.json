@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-06-20T13:02:04.772688",
+  "cohen_kappa": -0.11961722488038284,
+  "agreement_level": "POOR",
+  "total_pairs": 18,
+  "agreed": 5,
+  "disagreed": 13,
+  "agreement_percentage": 27.77777777777778,
+  "confusion_matrix": [
+    [
+      0,
+      1,
+      4
+    ],
+    [
+      4,
+      5,
+      1
+    ],
+    [
+      2,
+      1,
+      0
+    ]
+  ],
+  "label_distribution": {
+    "annotator_A": {
+      "0": 5,
+      "1": 10,
+      "2": 3
+    },
+    "annotator_B": {
+      "0": 6,
+      "1": 7,
+      "2": 5
+    }
+  },
+  "disagreement_cases": [
+    {
+      "sentence_id": "10",
+      "sentence": "काठमाडौंमा आज सबेरे मूसलधार वर्षा भएको छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 2,
+      "annotator_B_label": 0,
+      "notes_A": "Uncertain - multiple interpretations possible",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "29",
+      "sentence": "गत महिना विदेशी पर्यटकको आगमन बढेको छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 0,
+      "annotator_B_label": 2,
+      "notes_A": "Uncertain - multiple interpretations possible",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "37",
+      "sentence": "नेपाली क्रिकेट टीम अन्तर्राष्ट्रिय खेलमा जयी भएको छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 0,
+      "annotator_B_label": 2,
+      "notes_A": "",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "38",
+      "sentence": "नेपाली क्रिकेट टीम अन्तर्राष्ट्रिय खेलमा जयी भएको छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 1,
+      "annotator_B_label": 2,
+      "notes_A": "",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "49",
+      "sentence": "नेपमा सामाजिक माध्यम प्रयोगकर्ता संख्या बढ्दै छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 2,
+      "annotator_B_label": 0,
+      "notes_A": "Uncertain - multiple interpretations possible",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "52",
+      "sentence": "नेपमा सामाजिक माध्यम प्रयोगकर्ता संख्या बढ्दै छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 0,
+      "annotator_B_label": 2,
+      "notes_A": "",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "64",
+      "sentence": "मूल्य सामान्य छ तर गुणस्तर उत्कृष्ट छ।",
+      "domain": "ecommerce_reviews",
+      "annotator_A_label": 1,
+      "annotator_B_label": 0,
+      "notes_A": "",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "70",
+      "sentence": "नयाँ कपडा पस्ट याद गर्न सहजै धुइए पनि हराए।",
+      "domain": "ecommerce_reviews",
+      "annotator_A_label": 1,
+      "annotator_B_label": 0,
+      "notes_A": "",
+      "notes_B": "Uncertain - multiple interpretations possible"
+    },
+    {
+      "sentence_id": "76",
+      "sentence": "यो किताब पढ्न बहुत रोचक छ।",
+      "domain": "ecommerce_reviews",
+      "annotator_A_label": 0,
+      "annotator_B_label": 1,
+      "notes_A": "",
+      "notes_B": ""
+    },
+    {
+      "sentence_id": "8",
+      "sentence": "काठमाडौंमा आज सबेरे मूसलधार वर्षा भएको छ।",
+      "domain": "news_politics",
+      "annotator_A_label": 0,
+      "annotator_B_label": 2,
+      "notes_A": "",
+      "notes_B": ""
+    }
+  ],
+  "action_required": "❌ REJECT: Reconstruct guidelines and restart validation",
+  "interpretation": {
+    "<0.40": "Poor - Reject & reconstruct guidelines",
+    "0.40-0.60": "Moderate - Run consensus mediation",
+    "0.60-0.80": "Substantial - Accept ✓",
+    "≥0.80": "Near-perfect - Excellent"
+  }
+}

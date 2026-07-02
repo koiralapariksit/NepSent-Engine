@@ -1,0 +1,88 @@
+{
+  "accuracy": 0.5882352941176471,
+  "macro_f1": 0.5305322128851541,
+  "macro_precision": 0.7151515151515152,
+  "macro_recall": 0.5888888888888889,
+  "confusion_matrix": [
+    [
+      1,
+      2,
+      3
+    ],
+    [
+      0,
+      3,
+      2
+    ],
+    [
+      0,
+      0,
+      6
+    ]
+  ],
+  "per_class": {
+    "Negative": {
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "f1": 0.2857142857142857,
+      "support": 6
+    },
+    "Positive": {
+      "precision": 0.6,
+      "recall": 0.6,
+      "f1": 0.6,
+      "support": 5
+    },
+    "Neutral": {
+      "precision": 0.5454545454545454,
+      "recall": 1.0,
+      "f1": 0.7058823529411765,
+      "support": 6
+    }
+  },
+  "classification_report": "              precision    recall  f1-score   support\n\n    Negative       1.00      0.17      0.29         6\n    Positive       0.60      0.60      0.60         5\n     Neutral       0.55      1.00      0.71         6\n\n    accuracy                           0.59        17\n   macro avg       0.72      0.59      0.53        17\nweighted avg       0.72      0.59      0.53        17\n",
+  "cross_domain": {
+    "accuracy": 0.5,
+    "macro_f1": 0.5222222222222223,
+    "macro_precision": 0.5,
+    "macro_recall": 0.611111111111111,
+    "confusion_matrix": [
+      [
+        1,
+        1,
+        1
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        1,
+        0,
+        1
+      ]
+    ],
+    "per_class": {
+      "Negative": {
+        "precision": 0.5,
+        "recall": 0.3333333333333333,
+        "f1": 0.4,
+        "support": 3
+      },
+      "Positive": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6666666666666666,
+        "support": 1
+      },
+      "Neutral": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "support": 2
+      }
+    },
+    "classification_report": "              precision    recall  f1-score   support\n\n    Negative       0.50      0.33      0.40         3\n    Positive       0.50      1.00      0.67         1\n     Neutral       0.50      0.50      0.50         2\n\n    accuracy                           0.50         6\n   macro avg       0.50      0.61      0.52         6\nweighted avg       0.50      0.50      0.48         6\n"
+  }
+}
