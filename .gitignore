@@ -1,0 +1,122 @@
+# ==============================================================================
+# NepSent-Engine: Comprehensive Git Ignore Configuration
+# Python / PyTorch / Transformers / Low-Resource NLP Research Project
+# ==============================================================================
+
+# --- Secrets, Credentials & Local Environment ---
+.env
+.env.local
+.env.*.local
+*.env
+*.pem
+*.key
+*.token
+*.cert
+secrets.*
+client_secrets.json
+
+# --- Virtual Environments ---
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+bin/
+include/
+lib/
+lib64/
+share/
+
+# --- Python Bytecode & Runtime Artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.manifest
+*.spec
+
+# --- Build, Distribution & Packaging ---
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Machine Learning Models, Checkpoints & Large Binaries ---
+# Serialized PyTorch / HuggingFace / Scikit-Learn weights (>50MB)
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.pkl
+*.joblib
+*.h5
+*.tflite
+*.ckpt
+
+# Checkpoint and Run Directories
+checkpoints/
+models/saved/
+runs/
+wandb/
+mlruns/
+lightning_logs/
+
+# Pretrained Embeddings & Word Vectors
+*.vec
+*.vec.gz
+cc.ne.300.vec*
+crawl-300d-2M*
+
+# --- Data Caches, Temporary Dumps & Scratch Directories ---
+data/scratch/
+data/cache/
+.cache/
+*.tmp
+*.temp
+
+# --- Logs & Process Traces ---
+*.log
+logs/
+*.trace
+
+# --- Testing, Coverage & Type Checking ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# --- IDEs, Editors & Operating System ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- Streamlit Cache ---
+.streamlit/
+
