@@ -17,44 +17,48 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Set, Optional, Tuple, Iterable, Any
 
-from nepali_scraper.config import PROJECT_ROOT, DOMAIN_TARGETS
+from nepali_scraper.config import PROJECT_ROOT, DOMAIN_TARGETS, CANONICAL_DOMAINS
 from nepali_scraper.processors import (
     NepaliTextProcessor,
     compute_sentence_hash,
     devanagari_ratio,
+    normalize_nepali_unicode,
+    compute_hindi_contamination_score,
+    HINDI_EXCLUSIVE_MARKERS,
+    COLLOQUIAL_LOANWORDS,
+    NEPALI_VERBAL_INFLECTIONS,
+    WORD_TOKEN_PATTERN,
 )
 
 logger = logging.getLogger(__name__)
 
-# Canonical domain taxonomy
-CANONICAL_DOMAINS = {
-    "news": "news_politics",
-    "news_politics": "news_politics",
-    "politics": "news_politics",
+# Canonical domain taxonomy mapping (aliases -> canonical domain tuple)
+CANONICAL_DOMAIN_MAP = {
+    "news_editorial": "news_editorial",
+    "ecommerce_reviews": "ecommerce_reviews",
+    "social_comments": "social_comments",
+    "general_unclassified": "general_unclassified",
+    # Backward compatible aliases
+    "news": "news_editorial",
+    "news_politics": "news_editorial",
+    "politics": "news_editorial",
     "reviews": "ecommerce_reviews",
     "ecommerce": "ecommerce_reviews",
-    "ecommerce_reviews": "ecommerce_reviews",
-    "social": "social_media",
-    "social_media": "social_media",
-    "twitter": "social_media",
-    "reddit": "social_media",
+    "social": "social_comments",
+    "social_media": "social_comments",
+    "twitter": "social_comments",
+    "reddit": "social_comments",
+    "general": "general_unclassified",
 }
-
-# High-frequency Hindi-exclusive function words and auxiliaries
-# These words do not occur in authentic standard Nepali text
-HINDI_EXCLUSIVE_MARKERS = {
-    "है", "हैं", "था", "थी", "थे", "क्योंकि", "लेकिन", "नहीं", "किया", "कियागया",
-    "करते", "करती", "रहा", "रही", "रहे", "होता", "होती", "होते", "मुझे", "हमे",
-    "आपको", "उनको", "इसका", "उसका", "बहुत"
-}
-
-# Tokenization regex for Devanagari words excluding sentence delimiters (U+0964 Purna Viram, U+0965 Deergha Viram)
-WORD_TOKEN_PATTERN = re.compile(r'[\u0900-\u0963\u0966-\u097F\w]+')
 
 
 def detect_hindi_contamination(text: str) -> Tuple[bool, List[str]]:
     """
     Detect whether Devanagari text contains Hindi-exclusive function words.
+    
+    Implements composite scoring: does NOT reject a sentence based on a single
+    loanword ('लेकिन', 'बहुत') when authentic Nepali verbal inflections
+    ('छ', 'छन्', 'थियो', 'भयो', 'गर्छ', 'छैन', 'होइन', etc.) are present.
     
     Args:
         text: Input string
@@ -67,7 +71,18 @@ def detect_hindi_contamination(text: str) -> Tuple[bool, List[str]]:
     
     tokens = set(WORD_TOKEN_PATTERN.findall(text))
     detected = [word for word in tokens if word in HINDI_EXCLUSIVE_MARKERS]
-    return len(detected) > 0, detected
+    if not detected:
+        return False, []
+        
+    detected_nepali = [w for w in tokens if w in NEPALI_VERBAL_INFLECTIONS]
+    only_loanwords = all(w in COLLOQUIAL_LOANWORDS for w in detected)
+    
+    if only_loanwords and len(detected_nepali) > 0:
+        return False, detected
+        
+    conf = compute_hindi_contamination_score(text)
+    is_contaminated = bool(conf >= 0.35)
+    return is_contaminated, detected
 
 
 def char_ngram_jaccard(text1: str, text2: str, n: int = 3) -> float:
@@ -157,7 +172,7 @@ class DatasetIngestor:
         """Convert domain variations to canonical domain identifier."""
         if not domain_raw:
             return None
-        return CANONICAL_DOMAINS.get(domain_raw.strip().lower())
+        return CANONICAL_DOMAIN_MAP.get(domain_raw.strip().lower())
     
     def _is_near_duplicate(self, text: str) -> Tuple[bool, Optional[str]]:
         """
@@ -210,12 +225,11 @@ class DatasetIngestor:
             self.stats["rejected_invalid_domain"] += 1
             return None
         
-        source = raw.get("source", "").strip() if raw.get("source") else "unspecified"
-        license_str = raw.get("license", "").strip() if raw.get("license") else "unspecified"
+        source = raw.get("source", "").strip() if raw.get("source") else "UNVERIFIED"
+        license_str = raw.get("license", "").strip() if raw.get("license") else "UNKNOWN_REVIEW_REQUIRED"
         
-        timestamp = raw.get("collection_timestamp")
-        if not timestamp:
-            timestamp = datetime.now(timezone.utc).isoformat()
+        # Invariant A4 & B3: Default collection_timestamp strictly to None if missing
+        timestamp = raw.get("collection_timestamp", None)
         
         # 2. Text cleaning & Unicode NFC normalization
         cleaned_text = self.processor.clean_and_normalize(text)
@@ -231,8 +245,9 @@ class DatasetIngestor:
             self.stats["rejected_devanagari_ratio"] += 1
             return None
         
-        # 5. Hindi & foreign Devanagari contamination check
+        # 5. Hindi & foreign Devanagari contamination check (graded confidence)
         is_contaminated, hindi_words = detect_hindi_contamination(cleaned_text)
+        hindi_confidence = compute_hindi_contamination_score(cleaned_text)
         if is_contaminated:
             self.stats["flagged_hindi_contamination"] += 1
             if self.drop_hindi_contaminated:
@@ -253,6 +268,9 @@ class DatasetIngestor:
         # Record passes all validation checks
         record_id = raw.get("id") or f"nep_{sentence_hash[:12]}"
         
+        # Invariant A4 & B3: Never default provenance_status to REAL_COLLECTED
+        provenance_status = raw.get("provenance_status", "UNVERIFIED")
+        
         validated_record = {
             "id": record_id,
             "text": cleaned_text,
@@ -263,10 +281,11 @@ class DatasetIngestor:
             "sha256_hash": sentence_hash,
             "devanagari_ratio": round(ratio, 4),
             "char_length": len(cleaned_text),
-            "provenance_status": raw.get("provenance_status", "REAL_COLLECTED"),
+            "provenance_status": provenance_status,
             "schema_version": "2.0-ordinal",
             "is_contaminated": is_contaminated,
             "hindi_markers": hindi_words,
+            "hindi_contamination_confidence": round(hindi_confidence, 4),
         }
         
         # Preserve ground truth label if already annotated

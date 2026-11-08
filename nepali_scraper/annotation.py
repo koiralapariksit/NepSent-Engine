@@ -15,6 +15,7 @@ from collections import defaultdict
 from typing import List, Dict, Tuple, Optional, Any
 
 from nepali_scraper.config import PROJECT_ROOT, LABEL_SCHEMA, SCHEMA_VERSION
+from nepali_scraper.processors import normalize_nepali_unicode, compute_sentence_hash
 
 logger = logging.getLogger(__name__)
 
@@ -233,18 +234,37 @@ def adjudicate_annotations(
     def load_sheet(p: Path) -> Dict[str, Dict[str, Any]]:
         lookup = {}
         with open(p, "r", encoding="utf-8") as f:
-            for line in f:
+            for line_no, line in enumerate(f, start=1):
                 line_str = line.strip()
                 if line_str:
                     item = json.loads(line_str)
-                    rec_id = item.get("id") or item.get("sha256_hash")
+                    rec_id = item.get("id") or item.get("record_id") or item.get("sha256_hash")
+                    if not rec_id:
+                        text_val = item.get("text", "")
+                        if text_val:
+                            rec_id = compute_sentence_hash(text_val)
+                            item["sha256_hash"] = rec_id
+                        else:
+                            raise ValueError(f"Record at line {line_no} in {p} missing id, sha256_hash, and text.")
                     lookup[rec_id] = item
         return lookup
     
     sheet_a = load_sheet(file_a)
     sheet_b = load_sheet(file_b)
     
-    common_ids = [rid for rid in sheet_a if rid in sheet_b]
+    # Invariant C1: Stable-ID Alignment & Missing ID validation
+    keys_a = set(sheet_a.keys())
+    keys_b = set(sheet_b.keys())
+    if keys_a != keys_b:
+        missing_in_b = keys_a - keys_b
+        missing_in_a = keys_b - keys_a
+        raise ValueError(
+            f"Annotation ID mismatch between annotators: "
+            f"{len(missing_in_b)} records missing in Annotator B, "
+            f"{len(missing_in_a)} records missing in Annotator A."
+        )
+    
+    common_ids = sorted(list(keys_a))
     
     labels_a = []
     labels_b = []
@@ -260,6 +280,16 @@ def adjudicate_annotations(
     for rid in common_ids:
         item_a = sheet_a[rid]
         item_b = sheet_b[rid]
+        
+        # Invariant C1: Assert text equality under normalize_nepali_unicode
+        text_a = normalize_nepali_unicode(item_a.get("text", ""))
+        text_b = normalize_nepali_unicode(item_b.get("text", ""))
+        if text_a != text_b:
+            raise ValueError(
+                f"Annotation text mismatch for stable ID '{rid}':\n"
+                f"Annotator A: {text_a}\n"
+                f"Annotator B: {text_b}"
+            )
         
         la = item_a.get("label")
         lb = item_b.get("label")

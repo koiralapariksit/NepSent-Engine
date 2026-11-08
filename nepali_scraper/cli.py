@@ -23,14 +23,21 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from nepali_scraper.config import PROJECT_ROOT, SCHEMA_VERSION, LABEL_SCHEMA
-from nepali_scraper.processors import NepaliTextProcessor, compute_sentence_hash
+from nepali_scraper.config import (
+    PROJECT_ROOT,
+    SCHEMA_VERSION,
+    LABEL_SCHEMA,
+    CANONICAL_DOMAINS,
+    init_project_directories,
+)
+from nepali_scraper.processors import NepaliTextProcessor, compute_sentence_hash, normalize_nepali_unicode
 from nepali_scraper.collectors import DatasetIngestor
 from nepali_scraper.splitter import hash_grouped_stratified_split
 from nepali_scraper.annotation import compute_iaa
 from nepali_scraper.models.classical import (
     MajorityBaselineClassifier,
     TfidfLinearModel,
+    SubwordTfidfClassifier,
     SubwordFastTextClassifier,
 )
 from nepali_scraper.evaluation.metrics import (
@@ -87,12 +94,16 @@ def load_trained_model(checkpoint_dir: Union[str, Path]) -> Tuple[Any, str]:
         return MajorityBaselineClassifier.load(chk_path), "majority"
     elif "TfidfLinearModel" in model_type or (chk_path / "tfidf_model.joblib").is_file():
         return TfidfLinearModel.load(chk_path), "tfidf"
-    elif "SubwordFastTextClassifier" in model_type or (chk_path / "fasttext_model.joblib").is_file():
-        return SubwordFastTextClassifier.load(chk_path), "fasttext"
+    elif (
+        "SubwordTfidfClassifier" in model_type
+        or "SubwordFastTextClassifier" in model_type
+        or (chk_path / "subword_model.joblib").is_file()
+        or (chk_path / "fasttext_model.joblib").is_file()
+    ):
+        return SubwordTfidfClassifier.load(chk_path), "subword_tfidf"
     elif manifest_file.is_file() or (chk_path / "config.json").is_file():
         from nepali_scraper.models.transformers_Engine import TransformerSentimentTrainer
-        trainer = TransformerSentimentTrainer(str(chk_path))
-        trainer.load_model(chk_path)
+        trainer = TransformerSentimentTrainer.load(chk_path)
         return trainer, "transformer"
     else:
         raise FileNotFoundError(
@@ -142,10 +153,16 @@ def handle_ingest(args: argparse.Namespace) -> int:
         r.setdefault("source", args.source)
         r.setdefault("license", args.license)
         r.setdefault("domain", args.domain)
+        r.setdefault("provenance_status", "UNVERIFIED")
+        r.setdefault("collection_timestamp", None)
         
     clean_records = ingestor.ingest_records(raw_records)
     stats = ingestor.stats
     
+    if len(clean_records) == 0:
+        logger.error(f"Ingestion failed: 0 valid records processed from {input_path}")
+        return 1
+        
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         for r in clean_records:
@@ -199,34 +216,70 @@ def handle_split(args: argparse.Namespace) -> int:
 
 
 def handle_iaa(args: argparse.Namespace) -> int:
-    """Handle 'iaa' subcommand."""
+    """Handle 'iaa' subcommand with stable-ID alignment and Unicode validation."""
     file1 = Path(args.file1).resolve()
     file2 = Path(args.file2).resolve()
     
-    def _read_annos(path: Path) -> List[Dict[str, Any]]:
-        rows = []
+    def _read_annos_dict(path: Path) -> Dict[str, Dict[str, Any]]:
+        lookup = {}
         if path.suffix.lower() == ".jsonl":
             with open(path, "r", encoding="utf-8") as f:
-                for line in f:
+                for line_no, line in enumerate(f, start=1):
                     if line.strip():
-                        rows.append(json.loads(line))
+                        r = json.loads(line)
+                        rec_id = r.get("id") or r.get("record_id") or r.get("sha256_hash")
+                        if not rec_id:
+                            t = r.get(args.text_key, "")
+                            rec_id = compute_sentence_hash(t) if t else f"line_{line_no}"
+                        lookup[rec_id] = r
         else:
             import csv
             with open(path, "r", encoding="utf-8") as f:
-                rows = list(csv.DictReader(f))
-        return rows
+                for line_no, r in enumerate(csv.DictReader(f), start=1):
+                    rec_id = r.get("id") or r.get("record_id") or r.get("sha256_hash")
+                    if not rec_id:
+                        t = r.get(args.text_key, "")
+                        rec_id = compute_sentence_hash(t) if t else f"line_{line_no}"
+                    lookup[rec_id] = r
+        return lookup
         
-    annos1 = _read_annos(file1)
-    annos2 = _read_annos(file2)
+    annos1_dict = _read_annos_dict(file1)
+    annos2_dict = _read_annos_dict(file2)
     
-    labels_a = [int(r[args.label_key]) for r in annos1]
-    labels_b = [int(r[args.label_key]) for r in annos2]
-    domains = [r.get(args.domain_key) for r in annos1] if annos1 and args.domain_key in annos1[0] else None
+    # Invariant C1: Stable-ID Alignment validation
+    ids1 = set(annos1_dict.keys())
+    ids2 = set(annos2_dict.keys())
+    if ids1 != ids2:
+        raise ValueError(
+            f"Annotation ID mismatch: {len(ids1 - ids2)} records missing in file2, "
+            f"{len(ids2 - ids1)} records missing in file1."
+        )
+        
+    common_ids = sorted(list(ids1))
+    labels_a = []
+    labels_b = []
+    domains = []
     
+    for rid in common_ids:
+        r1 = annos1_dict[rid]
+        r2 = annos2_dict[rid]
+        t1 = normalize_nepali_unicode(r1.get(args.text_key, ""))
+        t2 = normalize_nepali_unicode(r2.get(args.text_key, ""))
+        if t1 != t2:
+            raise ValueError(
+                f"Annotation text mismatch for stable ID '{rid}':\n"
+                f"File 1: {t1}\n"
+                f"File 2: {t2}"
+            )
+        labels_a.append(int(r1[args.label_key]))
+        labels_b.append(int(r2[args.label_key]))
+        if args.domain_key in r1:
+            domains.append(r1[args.domain_key])
+            
     iaa_report = compute_iaa(
         labels_a=labels_a,
         labels_b=labels_b,
-        domains=domains,
+        domains=domains if domains else None,
     )
     
     out_str = json.dumps(iaa_report, ensure_ascii=False, indent=2)
@@ -269,8 +322,27 @@ def handle_train(args: argparse.Namespace) -> int:
         model = TfidfLinearModel(classifier_type="logistic_regression", seed=args.seed)
     elif model_choice in ["tfidf_svm", "tfidf_linearsvc"]:
         model = TfidfLinearModel(classifier_type="linear_svc", seed=args.seed)
-    elif model_choice == "fasttext":
-        model = SubwordFastTextClassifier(seed=args.seed)
+    elif model_choice in ["subword_tfidf", "fasttext"]:
+        model = SubwordTfidfClassifier(seed=args.seed)
+    elif model_choice in ["mbert", "muril", "nepberta"]:
+        from nepali_scraper.models.transformers_Engine import TransformerSentimentTrainer
+        val_file = data_dir / "val.jsonl"
+        val_texts, val_labels = None, None
+        if val_file.is_file():
+            val_texts, val_labels = [], []
+            with open(val_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        item = json.loads(line)
+                        val_texts.append(item["text"])
+                        val_labels.append(int(item["label"]))
+        trainer = TransformerSentimentTrainer(model_name_or_path=model_choice, seed=args.seed)
+        logger.info(f"Fine-tuning transformer: {model_choice}...")
+        trainer.fit(train_texts, train_labels, X_val=val_texts, y_val=val_labels)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        trainer.save(out_dir)
+        logger.info(f"Model saved successfully to {out_dir}")
+        return 0
     else:
         logger.error(f"Unsupported model: {model_choice}")
         return 1
@@ -460,9 +532,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest = subparsers.add_parser("ingest", help="Ingest and validate raw text records")
     p_ingest.add_argument("--input", required=True, help="Input raw data file (CSV, JSONL, JSON, TXT)")
     p_ingest.add_argument("--output", required=True, help="Output clean JSONL file path")
-    p_ingest.add_argument("--source", default="raw_data", help="Source provenance identifier")
-    p_ingest.add_argument("--license", default="CC-BY-4.0", help="Data license")
-    p_ingest.add_argument("--domain", default="general", help="Domain identifier")
+    p_ingest.add_argument("--source", default="UNVERIFIED", help="Source provenance identifier")
+    p_ingest.add_argument("--license", default="UNKNOWN_REVIEW_REQUIRED", help="Data license")
+    p_ingest.add_argument("--domain", default="general_unclassified", choices=list(CANONICAL_DOMAINS), help="Domain identifier")
     
     # 2. split
     p_split = subparsers.add_parser("split", help="Leakage-free hash-grouped stratified partition")
@@ -485,8 +557,9 @@ def build_parser() -> argparse.ArgumentParser:
     # 4. train
     p_train = subparsers.add_parser("train", help="Train classical or transformer sentiment models")
     p_train.add_argument("--data-dir", required=True, help="Directory containing train.jsonl")
-    p_train.add_argument("--model", required=True, choices=["majority", "tfidf_logreg", "tfidf_svm", "fasttext"],
-                         help="Model architecture choice")
+    p_train.add_argument("--model", required=True, choices=[
+        "majority", "tfidf_logreg", "tfidf_svm", "subword_tfidf", "fasttext", "mbert", "muril", "nepberta"
+    ], help="Model architecture choice")
     p_train.add_argument("--output-dir", required=True, help="Directory to save model checkpoint")
     p_train.add_argument("--seed", type=int, default=42, help="Deterministic seed")
     
@@ -510,6 +583,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """CLI execution entrypoint."""
+    init_project_directories()
     parser = build_parser()
     args = parser.parse_args()
     

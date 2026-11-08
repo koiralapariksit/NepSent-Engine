@@ -11,6 +11,7 @@ Provides:
 from .classical import (
     MajorityBaselineClassifier,
     TfidfLinearModel,
+    SubwordTfidfClassifier,
     SubwordFastTextClassifier,
 )
 
@@ -21,6 +22,7 @@ from .transformers_Engine import (
 __all__ = [
     "MajorityBaselineClassifier",
     "TfidfLinearModel",
+    "SubwordTfidfClassifier",
     "SubwordFastTextClassifier",
     "TransformerSentimentTrainer",
 ]

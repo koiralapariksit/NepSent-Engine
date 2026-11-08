@@ -20,12 +20,34 @@ from nepali_scraper.processors import (
     compute_sentence_hash,
     devanagari_ratio,
     is_valid_nepali_text,
+    normalize_nepali_unicode,
 )
 
 
 # ============================================================================
 # 1. UNICODE NFC NORMALIZATION TESTS
 # ============================================================================
+
+def test_normalize_nepali_unicode_behavior():
+    """
+    Verify normalize_nepali_unicode:
+    - Applies NFC composition
+    - Strips non-semantic zero-width chars (\\u200B, \\uFEFF, \\u200E, \\u200F)
+    - Preserves semantic joiners \\u200C (ZWNJ) and \\u200D (ZWJ)
+    - Collapses whitespace
+    """
+    raw = "  नेपाल\u200Bको\uFEFF  \u200Eसुन्दर\u200F   \u200Dदृश्य\u200C  "
+    norm = normalize_nepali_unicode(raw)
+    assert "\u200B" not in norm
+    assert "\uFEFF" not in norm
+    assert "\u200E" not in norm
+    assert "\u200F" not in norm
+    assert "\u200D" in norm
+    assert "\u200C" in norm
+    assert "  " not in norm
+    assert norm == "नेपालको सुन्दर \u200Dदृश्य\u200C"
+    assert unicodedata.is_normalized("NFC", norm)
+
 
 def test_unicode_nfc_normalization():
     """Verify that decomposed text is canonically composed into NFC form."""

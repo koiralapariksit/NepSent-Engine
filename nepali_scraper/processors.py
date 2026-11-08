@@ -27,6 +27,24 @@ SENTENCE_TERMINATOR_PATTERN = re.compile(r'([।?!॥]+)')
 # Whitespace normalization pattern (includes ASCII whitespace, non-breaking space, thin/em/en spaces)
 WHITESPACE_PATTERN = re.compile(r'[\t\r\f\v\u00A0\u2000-\u200A\s]+')
 
+# High-frequency Hindi-exclusive function words and auxiliaries
+HINDI_EXCLUSIVE_MARKERS = {
+    "है", "हैं", "था", "थी", "थे", "क्योंकि", "लेकिन", "नहीं", "किया", "कियागया",
+    "करते", "करती", "रहा", "रही", "रहे", "होता", "होती", "होते", "मुझे", "हमे",
+    "आपको", "उनको", "इसका", "उसका", "बहुत"
+}
+
+# Common Hindi loanwords used colloquially in Nepali
+COLLOQUIAL_LOANWORDS = {"लेकिन", "बहुत"}
+
+# Authentic Nepali verbal inflections and grammatical auxiliaries
+NEPALI_VERBAL_INFLECTIONS = {
+    "छ", "छन्", "थियो", "थिइन्", "थिई", "भयो", "गर्छ", "गर्छन्", "छैन", "छैनन्", "होइन",
+    "हुनेछ", "गरेको", "गरेका", "भने", "गर्नु", "थिए", "भनेर", "रहेको", "रहेका", "हुन्"
+}
+
+WORD_TOKEN_PATTERN = re.compile(r'[\u0900-\u0963\u0966-\u097F\w]+')
+
 
 def clean_zero_width_characters(text: str) -> str:
     """
@@ -52,6 +70,73 @@ def clean_zero_width_characters(text: str) -> str:
     return text
 
 
+def normalize_nepali_unicode(text: str) -> str:
+    """
+    Apply Unicode NFC normalization, zero-width character handling, and whitespace collapsing.
+    
+    Applies Unicode Form C (NFC) canonical composition, strips non-semantic invisible
+    zero-width characters (\\u200B, \\uFEFF, \\u200E, \\u200F, \\u00AD, \\u2060), preserves
+    semantic Devanagari joiners \\u200C (ZWNJ) and \\u200D (ZWJ) needed for conjunct ligatures
+    and eyelash-ra, and collapses arbitrary whitespace sequences into a single ASCII space.
+    
+    Args:
+        text: Raw input string
+        
+    Returns:
+        Canonical NFC-normalized string
+    """
+    if not text:
+        return ""
+    # Step 1: Unicode NFC normalization
+    text = unicodedata.normalize('NFC', text)
+    # Step 2: Clean non-semantic zero-width characters while preserving ZWJ/ZWNJ
+    text = clean_zero_width_characters(text)
+    # Step 3: Collapse whitespace
+    text = WHITESPACE_PATTERN.sub(' ', text).strip()
+    return text
+
+
+def compute_hindi_contamination_score(text: str) -> float:
+    """
+    Compute graded Hindi contamination confidence score from 0.0 to 1.0.
+    
+    Distinguishes genuine Hindi grammatical contamination from benign loanwords
+    (e.g., 'लेकिन', 'बहुत') when authentic Nepali verbal inflections are present.
+    
+    Args:
+        text: Input string
+        
+    Returns:
+        Float between 0.0 and 1.0 representing contamination confidence
+    """
+    if not text:
+        return 0.0
+    tokens = set(WORD_TOKEN_PATTERN.findall(text))
+    if not tokens:
+        return 0.0
+        
+    detected_hindi = [w for w in tokens if w in HINDI_EXCLUSIVE_MARKERS]
+    if not detected_hindi:
+        return 0.0
+        
+    detected_nepali = [w for w in tokens if w in NEPALI_VERBAL_INFLECTIONS]
+    
+    # If detected Hindi markers are exclusively colloquial loanwords and authentic Nepali inflections exist
+    only_loanwords = all(w in COLLOQUIAL_LOANWORDS for w in detected_hindi)
+    if only_loanwords and len(detected_nepali) > 0:
+        # Graded low confidence (<= 0.20), not considered true grammatical contamination
+        return round(min(0.20, len(detected_hindi) / (len(tokens) + 1e-5)), 4)
+        
+    if not detected_nepali:
+        # Strong Hindi markers with zero Nepali verbal inflections
+        score = min(1.0, 0.4 + 0.2 * len(detected_hindi))
+        return round(score, 4)
+        
+    # Both Hindi markers and Nepali markers present: graded ratio
+    ratio = len(detected_hindi) / (len(detected_hindi) + len(detected_nepali))
+    return round(float(ratio), 4)
+
+
 def compute_sentence_hash(text: str) -> str:
     """
     Compute deterministic SHA-256 hash of canonical NFC-normalized text.
@@ -66,11 +151,7 @@ def compute_sentence_hash(text: str) -> str:
     """
     if not text:
         return hashlib.sha256(b"").hexdigest()
-    # Normalize to NFC canonical form
-    canonical = unicodedata.normalize('NFC', text)
-    canonical = clean_zero_width_characters(canonical)
-    # Standardize whitespace
-    canonical = WHITESPACE_PATTERN.sub(' ', canonical).strip()
+    canonical = normalize_nepali_unicode(text)
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 
@@ -152,19 +233,7 @@ class NepaliTextProcessor:
         Returns:
             Cleaned and NFC-normalized string
         """
-        if not text:
-            return ""
-        
-        # Step 1: Unicode NFC normalization
-        text = unicodedata.normalize(self.norm_form, text)
-        
-        # Step 2: Clean non-semantic zero-width characters
-        text = clean_zero_width_characters(text)
-        
-        # Step 3: Collapse all whitespace variations to single space
-        text = WHITESPACE_PATTERN.sub(' ', text).strip()
-        
-        return text
+        return normalize_nepali_unicode(text)
     
     def segment_sentences(self, paragraph: str) -> List[str]:
         """

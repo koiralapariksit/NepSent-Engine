@@ -1,9 +1,9 @@
-# NepSent-Engine: A Methodologically Rigorous Research Platform for Low-Resource Nepali Sentiment Analysis
+# NepSent-Engine: A Methodologically Rigorous Research Protocol & Platform for Low-Resource Nepali Sentiment Analysis
 
 **Author:** Pariksit Koirala  
 **Affiliation:** Kathmandu University, Department of Computer Science & Engineering  
 **Date:** November 2026  
-**Status:** Academic Research Report & Benchmark Scaffold  
+**Status:** Academic Research Protocol & Verified Software Scaffold  
 **Repository:** https://github.com/koiralapariksit/NepSent-Engine  
 
 ---
@@ -145,8 +145,8 @@ All model training, splitting, and evaluation enforce fixed deterministic seedin
 2. **Level 1 (N-gram Linear Baselines):** `TfidfLinearModel`
    - Combines Devanagari word n-grams `(1, 2)` and character n-grams `(2, 4)` (`char_wb`).
    - Evaluates L2-regularized `LogisticRegression` and Platt-calibrated `LinearSVC`.
-3. **Level 2 (Subword Morphological Model):** `SubwordFastTextClassifier`
-   - Character n-grams `(3, 5)` with linear SGD log-loss classification, modeling verbal inflections.
+3. **Level 2 (Subword Morphological Model):** `SubwordTfidfClassifier` (honestly named; previously `SubwordFastTextClassifier` alias)
+   - Character n-grams `(3, 6)` with sublinear TF-IDF and L2 regularized logistic regression, modeling agglutinative verbal inflections without native C++ compilation dependencies.
 4. **Level 3 & 4 (Pretrained Transformers):** `TransformerSentimentTrainer`
    - Level 3: Multilingual `bert-base-multilingual-cased` and Indic `google/muril-base-cased`.
    - Level 4: Nepali Monolingual `Rajan/NepBERTa`.
@@ -167,66 +167,73 @@ $$\text{CI}_{95\%} = \left[ \text{Percentile}(\text{Macro F1}^*, 2.5), \; \text{
 
 ---
 
-## 12. Empirical Benchmark Results
+## 12. Planned Empirical Benchmark Protocol & Hypotheses
 
-> **Research Transparency Standard:** In accordance with our open-source research protocol, we do not fabricate benchmark metrics. The slots below represent the verified reporting structure to be populated via `python -m nepali_scraper.cli evaluate`:
+> **Research Transparency Standard:** In accordance with our open-source research protocol, we do not fabricate benchmark metrics. The slots below represent the verified reporting structure to be populated via `python -m nepali_scraper.cli evaluate` once authentic collected corpora are annotated and model training is executed:
+
+### 12.1 Planned Research Hypotheses
+- **Hypothesis 1 (Monolingual Representation Advantage):** Monolingual NepBERTa will achieve higher Macro F1 and lower subword fertility than multilingual mBERT/MuRIL on morphologically complex Devanagari verbs.
+- **Hypothesis 2 (Subword Classical Competitiveness):** Character n-gram subword modeling (`SubwordTfidfClassifier`) will significantly outperform word-level baselines and approach transformer-level Macro F1 with $>20\times$ lower inference latency.
+- **Hypothesis 3 (Cross-Domain Register Degradation):** Models trained exclusively on formal journalistic corpora will suffer statistically significant degradation ($>15\%$ drop in Macro F1) when evaluated out-of-domain on colloquial social media commentary.
+
+### 12.2 Verification & Reporting Template
 
 | Model Tier | Checkpoint / Architecture | Macro F1 [95% Bootstrap CI] | Accuracy | Negation Recall | Inference Latency |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Level 0** | Majority Baseline | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 0.05 ms |
-| **Level 1** | TF-IDF + Logistic Regression | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 0.85 ms |
-| **Level 1** | TF-IDF + Calibrated LinearSVC | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 0.92 ms |
-| **Level 2** | Subword FastText Equivalent | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 1.15 ms |
-| **Level 3** | mBERT (`bert-base-multilingual`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 22.4 ms |
-| **Level 3** | MuRIL (`google/muril-base-cased`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 28.1 ms |
-| **Level 4** | NepBERTa (`Rajan/NepBERTa`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | 18.7 ms |
+| **Level 0** | Majority Baseline | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 1** | TF-IDF + Logistic Regression | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 1** | TF-IDF + Calibrated LinearSVC | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 2** | Subword TF-IDF (`SubwordTfidfClassifier`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 3** | mBERT (`bert-base-multilingual`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 3** | MuRIL (`google/muril-base-cased`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
+| **Level 4** | NepBERTa (`Rajan/NepBERTa`) | `[EMPIRICAL_SLOT: nepsent evaluate]` | `[EMPIRICAL_SLOT]` | `[EMPIRICAL_SLOT]` | `[PENDING_BENCHMARK]` |
 
 ---
 
-## 13. Statistical Analysis & Confidence Intervals
+## 13. Statistical Analysis Protocol & Confidence Interval Estimation
 
-Point estimates in low-resource settings are notoriously brittle. With our non-parametric bootstrap engine ($B=2,000$), we analyze the width of empirical confidence intervals across class support sizes:
-- Datasets with test support $N_{\text{class}} \ge 80$ achieve stable confidence bounds with standard errors $\sigma_{\text{boot}} \le 0.025$.
-- Datasets with small support ($N_{\text{class}} < 50$) exhibit confidence interval widening up to $\pm 12.5\%$, corroborating the necessity of our statistical power warning flag.
+Point estimates in low-resource settings are notoriously brittle. With our non-parametric bootstrap engine ($B=2,000$), our evaluation protocol analyzes the width of empirical confidence intervals across class support sizes:
+- Datasets with test support $N_{\text{class}} \ge 80$ are hypothesized to achieve stable confidence bounds with standard errors $\sigma_{\text{boot}} \le 0.025$.
+- Datasets with small support ($N_{\text{class}} < 50$) trigger a statistical power warning flag (`statistical_power_warning: true`) due to expected confidence interval widening.
 
 ---
 
-## 14. Cross-Domain Evaluation (Leave-One-Domain-Out)
+## 14. Planned Cross-Domain Protocol (Leave-One-Domain-Out)
 
-We evaluate cross-domain transfer via Leave-One-Domain-Out (LODO) validation:
+Cross-domain transfer will be evaluated via Leave-One-Domain-Out (LODO) validation:
 $$\text{LODO Fold } D_i: \quad \text{Train} = \bigcup_{j \ne i} D_j, \quad \text{Test} = D_i$$
 
-Empirical observation slots populated by `nepali_scraper/evaluation/cross_domain.py`:
+Empirical observation slots to be populated by `nepali_scraper/evaluation/cross_domain.py`:
 - **In-Domain Journalism $\rightarrow$ Held-Out E-Commerce:** `[EMPIRICAL_SLOT: LODO news->reviews drop]`
 - **In-Domain Journalism $\rightarrow$ Held-Out Social Media:** `[EMPIRICAL_SLOT: LODO news->social drop]`
 
-The performance delta highlights the substantial distribution shift caused by informal register, slang, and code-mixing.
+The performance delta will quantify the distribution shift caused by informal register, colloquial vocabulary, and code-mixing.
 
 ---
 
-## 15. Linguistic Error Analysis & Subword Fertility
+## 15. Linguistic Error Analysis & Subword Fertility Protocol
 
 ### 15.1 Diagnostic Error Taxonomy
-Misclassifications are categorized using `generate_error_taxonomy`:
+Model misclassifications will be categorized using `generate_error_taxonomy`:
 1. **Negation Scope Error:** Sentence contains genuine morphological negation (छैन, गरेन, जान्नँ), but polarity is inverted.
 2. **Neutral-Polar Boundary Confusion:** Misclassifications crossing the factual boundary ($0/2 \leftrightarrow 1$).
 3. **Long-Sentence Degradation:** Multi-clause sentences ($> 200$ characters).
 4. **Code-Mixed Error:** Misclassified sentences featuring mixed Latin/Devanagari tokens.
 5. **High-Fertility Fragmentation:** Tokenizer fragmentation $> 2.5$ subwords per word.
 
-### 15.2 Subword Fertility Telemetry
-Tokenizer fertility $\Phi = \frac{\text{Total Tokens}}{\text{Total Words}}$ directly correlates with error rates:
-- WordPiece on mBERT displays high fertility on Devanagari inflections ($\Phi \ge 2.8$), fragmenting common verb stems.
-- MuRIL and NepBERTa exhibit lower fertility ($\Phi \le 1.8$), demonstrating superior morphological cohesion on complex verbs.
+### 15.2 Subword Fertility Telemetry Protocol
+Tokenizer fertility $\Phi = \frac{\text{Total Tokens}}{\text{Total Words}}$ will be tracked to measure morphological fragmentation:
+- Hypothesized that WordPiece on mBERT displays high fertility on Devanagari inflections ($\Phi \ge 2.5$), fragmenting common verb stems.
+- Hypothesized that MuRIL and NepBERTa exhibit lower fertility ($\Phi \le 1.8$), maintaining superior morphological cohesion on complex verbs.
 
 ---
 
-## 16. Discussion
+## 16. Methodological Discussion & Invariant Guarantees
 
-Our findings demonstrate that empirical rigor transforms conclusions in low-resource NLP:
-1. When data leakage is eliminated via sentence hash grouping, baseline scores typically decline by $6\text{--}12\%$ compared to naive random splits, exposing the artificial inflation present in prior literature.
-2. The ordinal schema 2.0 ensures that weighted agreement ($\kappa_w$) accurately penalizes extreme polarity inversions, providing genuine quality assurance for human annotations.
-3. Platt-calibrated linear baselines remain exceptionally competitive with deep transformers, offering a $20\times$ inference speedup and minimal memory footprint suitable for resource-constrained local deployment.
+Our architectural design establishes verified structural guarantees for low-resource NLP:
+1. **Zero Data Leakage:** Eliminating train/test leakage via sentence hash grouping guarantees that reported test metrics reflect generalization rather than memorization.
+2. **Mathematically Coherent Agreement:** Ordinal schema 2.0 ensures that weighted agreement ($\kappa_w$) accurately penalizes extreme polarity inversions ($0 \leftrightarrow 2$ penalized twice as much as $0 \leftrightarrow 1$), providing genuine quality assurance for human annotations.
+3. **Honest Classical Baselines:** Platt-calibrated linear and subword models provide transparent, reproducible reference points for evaluating deep neural transformer models.
 
 ---
 

@@ -75,6 +75,7 @@ st.caption(f"Schema Version: {SCHEMA_VERSION} | Ordinal Labels: 0 (Negative), 1 
 st.sidebar.header("Model Checkpoints")
 checkpoints_dir = PROJECT_ROOT / "checkpoints"
 available_checkpoints = find_available_checkpoints(checkpoints_dir)
+selected_checkpoint_names: List[str] = []
 
 if not available_checkpoints:
     st.sidebar.error("❌ No trained checkpoints found")
@@ -98,7 +99,10 @@ if not available_checkpoints:
     python -m nepali_scraper.cli train --data-dir data/splits/gold --model tfidf_logreg --output-dir checkpoints/tfidf_logreg
     ```
     """)
-    st.stop()
+    try:
+        st.stop()
+    except Exception:
+        pass
 else:
     checkpoint_names = [chk.name for chk in available_checkpoints]
     selected_checkpoint_names = st.sidebar.multiselect(
@@ -163,49 +167,52 @@ st.subheader("2. Model Predictions & Calibration Transparency")
 
 if not selected_checkpoint_names:
     st.warning("Please select at least one checkpoint from the sidebar.")
-    st.stop()
+    try:
+        st.stop()
+    except Exception:
+        pass
+else:
+    model_cols = st.columns(len(selected_checkpoint_names))
 
-model_cols = st.columns(len(selected_checkpoint_names))
-
-for idx, chk_name in enumerate(selected_checkpoint_names):
-    chk_path = checkpoints_dir / chk_name
-    with model_cols[idx]:
-        st.markdown(f"### `{chk_name}`")
-        try:
-            model, model_cat = load_trained_model(chk_path)
-            pred = int(model.predict([norm_text])[0])
-            pred_name = LABEL_SCHEMA.get(pred, str(pred))
-            
-            # Badge rendering
-            badge_class = "badge-neg" if pred == 0 else ("badge-neu" if pred == 1 else "badge-pos")
-            st.markdown(f"**Predicted Sentiment:** <span class='{badge_class}'>{pred_name} (Class {pred})</span>", unsafe_allow_html=True)
-            
-            # Probability and Calibration Status
-            if hasattr(model, "predict_proba"):
-                probas = model.predict_proba([norm_text])[0]
-                conf = float(np.max(probas))
+    for idx, chk_name in enumerate(selected_checkpoint_names):
+        chk_path = checkpoints_dir / chk_name
+        with model_cols[idx]:
+            st.markdown(f"### `{chk_name}`")
+            try:
+                model, model_cat = load_trained_model(chk_path)
+                pred = int(model.predict([norm_text])[0])
+                pred_name = LABEL_SCHEMA.get(pred, str(pred))
                 
-                # Check Calibration Status
-                if model_cat == "tfidf":
-                    st.caption("✅ **Platt-Calibrated Probability** (Logistic / Calibrated LinearSVC)")
-                elif model_cat == "majority":
-                    st.caption("ℹ️ **Empirical Training Prior**")
-                else:
-                    st.caption("⚠️ **Uncalibrated Softmax Score** (Heuristic Only)")
+                # Badge rendering
+                badge_class = "badge-neg" if pred == 0 else ("badge-neu" if pred == 1 else "badge-pos")
+                st.markdown(f"**Predicted Sentiment:** <span class='{badge_class}'>{pred_name} (Class {pred})</span>", unsafe_allow_html=True)
+                
+                # Probability and Calibration Status
+                if hasattr(model, "predict_proba"):
+                    probas = model.predict_proba([norm_text])[0]
+                    conf = float(np.max(probas))
                     
-                st.metric("Confidence", f"{conf * 100:.1f}%")
-                
-                # Distribution Chart
-                chart_data = {
-                    LABEL_SCHEMA[c]: float(probas[c])
-                    for c in [0, 1, 2]
-                }
-                st.bar_chart(chart_data)
-            else:
-                st.info(f"Predicted class: {pred_name}")
-                
-        except Exception as e:
-            st.error(f"Error loading model '{chk_name}': {str(e)}")
+                    # Check Calibration Status
+                    if model_cat == "tfidf":
+                        st.caption("✅ **Platt-Calibrated Probability** (Logistic / Calibrated LinearSVC)")
+                    elif model_cat == "majority":
+                        st.caption("ℹ️ **Empirical Training Prior**")
+                    else:
+                        st.caption("⚠️ **Uncalibrated Softmax Score** (Heuristic Only)")
+                        
+                    st.metric("Confidence", f"{conf * 100:.1f}%")
+                    
+                    # Distribution Chart
+                    chart_data = {
+                        LABEL_SCHEMA[c]: float(probas[c])
+                        for c in [0, 1, 2]
+                    }
+                    st.bar_chart(chart_data)
+                else:
+                    st.info(f"Predicted class: {pred_name}")
+                    
+            except Exception as e:
+                st.error(f"Error loading model '{chk_name}': {str(e)}")
 
 # Research Disclaimers & Calibration Notice
 st.markdown("---")

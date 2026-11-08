@@ -1,12 +1,16 @@
 # NepSent-Engine: A Methodologically Rigorous Nepali Sentiment Analysis Research Platform
 
 [![Pytest CI](https://github.com/koiralapariksit/NepSent-Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/koiralapariksit/NepSent-Engine/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Schema: 2.0-Ordinal](https://img.shields.io/badge/Schema-2.0--ordinal-green)](nepali_scraper/config.py)
-[![Test Coverage: 100%](https://img.shields.io/badge/Tests-64%2F64%20Passing-brightgreen)](tests/)
+[![Test Coverage: 100%](https://img.shields.io/badge/Tests-73%2F73%20Passing-brightgreen)](tests/)
 
 NepSent-Engine is an open-source, scientifically validated NLP research ecosystem and benchmark platform designed for low-resource Nepali sentiment analysis. It addresses persistent methodological flaws in low-resource sentiment literature—including **synthetic data leakage**, **inverted ordinal Kappa weights**, **uncalibrated softmax metrics**, and **naive single-character negation checks**.
+
+**Project Lead & Maintainer:** Parikshit Koirala (`koiralapariksit/NepSent-Engine`)  
+**Software Engineering Assistance:** Antigravity (Advanced Agentic AI Assistant)  
+**Status:** Software engineering and verification suite 100% complete (73/73 tests passing). Empirical research hypotheses and protocol are detailed in [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md).
 
 ---
 
@@ -43,7 +47,7 @@ NepSent-Engine is an open-source, scientifically validated NLP research ecosyste
 |   [ 4-TIER MODEL BENCHMARK LADDER ] (nepali_scraper/models/)                                    |
 |   Level 0: Majority Class Baseline Classifier                                                   |
 |   Level 1: N-gram Logistic Regression & Platt-Calibrated LinearSVC (Word + Char-WB)             |
-|   Level 2: Subword FastText Morphological Classifier (Char n-grams 3-5)                         |
+|   Level 2: Subword TF-IDF Classifier (SubwordTfidfClassifier, Char n-grams 3-6)                 |
 |   Level 3/4: Pretrained Deep Transformers (mBERT, MuRIL, NepBERTa)                              |
 |            |                                                                                    |
 |            v                                                                                    |
@@ -209,7 +213,7 @@ NepSent-Engine/
 │   ├── train_benchmark.py         # Multi-model training orchestrator & JSON manifest logger
 │   ├── models/                    # 4-tier model implementations
 │   │   ├── __init__.py
-│   │   ├── classical.py           # Majority, TF-IDF LogReg, Calibrated LinearSVC, FastText
+│   │   ├── classical.py           # Majority, TF-IDF LogReg, Calibrated LinearSVC, SubwordTfidfClassifier
 │   │   └── transformers_Engine.py # Unified HuggingFace trainer (mBERT, MuRIL, NepBERTa)
 │   └── evaluation/                # Statistical evaluation subsystem
 │       ├── __init__.py
@@ -218,9 +222,9 @@ NepSent-Engine/
 │       └── linguistic_analysis.py # Morphological negation, code-mixing & subword fertility
 ├── docs/                          # Academic documentation & research manuscripts
 │   ├── ANNOTATION_GUIDELINES.md   # Publication-grade native speaker annotation handbook
-│   ├── RESEARCH_REPORT.md         # Full 20-section publication manuscript
+│   ├── RESEARCH_PROTOCOL.md       # Research protocol, hypotheses & benchmark specification
 │   └── CODEX_AND_AI_WORKFLOW.md   # AI-assisted research case study & KU student workshop plan
-├── tests/                         # Complete unit test suite (64/64 passing)
+├── tests/                         # Complete unit test suite (73/73 passing)
 │   ├── test_config.py
 │   ├── test_processors.py
 │   ├── test_annotation_and_splitting.py

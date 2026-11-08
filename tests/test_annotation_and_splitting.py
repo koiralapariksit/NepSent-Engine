@@ -113,14 +113,21 @@ def test_hindi_contamination_detection():
     assert "नहीं" in markers_dirty
     assert "था" in markers_dirty
     
+    # Sentence with colloquial Hindi loanword ('लेकिन') but authentic Nepali verbal inflections ('छ', 'भयो')
+    nepali_with_loanword = "यो सामान धेरै राम्रो छ लेकिन मूल्य अलि महँगो भयो।"
+    is_contam_loan, markers_loan = detect_hindi_contamination(nepali_with_loanword)
+    assert not is_contam_loan
+    assert "लेकिन" in markers_loan
+
     # Ingestor drops contaminated sentence by default
     ingestor = DatasetIngestor(drop_hindi_contaminated=True)
     records = [
         {"text": nepali_clean, "domain": "news", "source": "test", "license": "CC-0"},
+        {"text": nepali_with_loanword, "domain": "news", "source": "test", "license": "CC-0"},
         {"text": hindi_contaminated, "domain": "news", "source": "test", "license": "CC-0"},
     ]
     accepted = ingestor.ingest_records(records)
-    assert len(accepted) == 1
+    assert len(accepted) == 2
     assert ingestor.stats["flagged_hindi_contamination"] == 1
 
 
@@ -311,12 +318,68 @@ def test_hash_grouped_stratified_split_zero_leakage():
     assert len(train_hashes & test_hashes) == 0
     assert len(val_hashes & test_hashes) == 0
     
-    # 2. All records partitioned
+    # 2. All unique sentence hashes partitioned (unanimous duplicates collapsed to 1 canonical record)
     total_split_records = len(splits["train"]) + len(splits["val"]) + len(splits["test"])
-    assert total_split_records == 60
+    assert total_split_records == 30
+    assert all("provenance_sources" in r for r in splits["train"])
     
     # 3. Zero leakage verification flag in metadata
     assert splits["metadata"]["zero_leakage_verified"] is True
+
+
+def test_contradictory_duplicate_quarantine():
+    """
+    Verify Invariant B1:
+    - If a hash cluster has conflicting labels without adjudication, quarantine to conflicts
+    - If a hash cluster has unanimous labels, collapse to 1 canonical record and merge provenance_sources
+    """
+    records = [
+        # Conflicting duplicate: same text/hash, differing labels (0 vs 2), not adjudicated
+        {"id": "c1_a", "sha256_hash": "hash_conflict_1", "text": "विवादित वाक्य", "label": 0, "domain": "news"},
+        {"id": "c1_b", "sha256_hash": "hash_conflict_1", "text": "विवादित वाक्य", "label": 2, "domain": "news"},
+        # Adjudicated duplicate: differing labels but marked is_adjudicated=True
+        {"id": "adj_a", "sha256_hash": "hash_adj", "text": "निर्णय भएको वाक्य", "label": 1, "domain": "news", "is_adjudicated": True},
+        # Unanimous duplicates with multiple sources
+        {"id": "u1_a", "sha256_hash": "hash_unan_1", "text": "सहमति वाक्य", "label": 2, "domain": "reviews", "source": "src1"},
+        {"id": "u1_b", "sha256_hash": "hash_unan_1", "text": "सहमति वाक्य", "label": 2, "domain": "reviews", "source": "src2"},
+    ]
+    
+    splits = hash_grouped_stratified_split(records, seed=42)
+    
+    # Conflicting records quarantined
+    assert len(splits["conflicts"]) == 2
+    conflict_ids = {r["id"] for r in splits["conflicts"]}
+    assert conflict_ids == {"c1_a", "c1_b"}
+    
+    # Adjudicated and unanimous records partitioned
+    partitioned_hashes = (
+        {r["sha256_hash"] for r in splits["train"]}
+        | {r["sha256_hash"] for r in splits["val"]}
+        | {r["sha256_hash"] for r in splits["test"]}
+    )
+    assert "hash_conflict_1" not in partitioned_hashes
+    assert "hash_adj" in partitioned_hashes
+    assert "hash_unan_1" in partitioned_hashes
+    
+    # Check unanimous duplicate collapsed to 1 record with merged provenance
+    unan_records = [r for r in splits["train"] + splits["val"] + splits["test"] if r["sha256_hash"] == "hash_unan_1"]
+    assert len(unan_records) == 1
+    assert "src1" in unan_records[0]["provenance_sources"]
+    assert "src2" in unan_records[0]["provenance_sources"]
+
+
+def test_stratification_fallback_to_label_only():
+    """Verify fallback to label-only stratification when composite cell has < 2 samples."""
+    records = [
+        {"id": "r1", "sha256_hash": "h1", "text": "वाक्य १", "label": 0, "domain": "news"},
+        {"id": "r2", "sha256_hash": "h2", "text": "वाक्य २", "label": 0, "domain": "reviews"}, # only 1 sample for (0, reviews)
+        {"id": "r3", "sha256_hash": "h3", "text": "वाक्य ३", "label": 1, "domain": "news"},
+        {"id": "r4", "sha256_hash": "h4", "text": "वाक्य ४", "label": 1, "domain": "news"},
+    ]
+    splits = hash_grouped_stratified_split(records, seed=42)
+    assert splits["metadata"]["stratification_mode"] == "label_only_fallback"
+    assert splits["metadata"]["zero_leakage_verified"] is True
+
 
 
 def test_splitter_statistical_power_warning():

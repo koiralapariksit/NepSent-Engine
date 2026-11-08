@@ -24,6 +24,7 @@ from nepali_scraper.models.classical import (
     MajorityBaselineClassifier,
     TfidfLinearModel,
     SubwordFastTextClassifier,
+    SubwordTfidfClassifier,
 )
 from nepali_scraper.models.transformers_Engine import (
     TransformerSentimentTrainer,
@@ -225,4 +226,90 @@ def test_transformer_sentiment_trainer_save_structure(tmp_path):
         assert manifest["model_type"] == "TransformerSentimentTrainer"
         assert manifest["hyperparameters"]["num_labels"] == 3
         assert manifest["model_size_bytes"] > 0
+
+
+def test_subword_tfidf_classifier_direct_and_alias():
+    """Verify SubwordTfidfClassifier is identical to SubwordFastTextClassifier alias."""
+    assert SubwordFastTextClassifier is SubwordTfidfClassifier
+    model = SubwordTfidfClassifier(min_ngram=3, max_ngram=5, C=1.0, seed=42)
+    assert model.metadata["model_type"] == "SubwordTfidfClassifier"
+
+
+def test_transformer_sentiment_trainer_load_error_handling(tmp_path):
+    """
+    STRICT RESEARCH INVARIANT TEST:
+    Verify TransformerSentimentTrainer.load raises FileNotFoundError for missing paths
+    and ValueError for corrupt manifests.
+    """
+    non_existent = tmp_path / "does_not_exist"
+    with pytest.raises(FileNotFoundError, match="not found"):
+        TransformerSentimentTrainer.load(non_existent)
+        
+    empty_dir = tmp_path / "empty_dir"
+    empty_dir.mkdir()
+    with pytest.raises(FileNotFoundError, match="Missing model weights or manifest"):
+        TransformerSentimentTrainer.load(empty_dir)
+        
+    corrupt_dir = tmp_path / "corrupt_chk"
+    corrupt_dir.mkdir()
+    (corrupt_dir / "training_manifest.json").write_text("{invalid_json: true", encoding="utf-8")
+    with pytest.raises(ValueError, match="Corrupt manifest file"):
+        TransformerSentimentTrainer.load(corrupt_dir)
+
+
+def test_transformer_early_stopping_and_best_state_restoration():
+    """
+    Verify validation loop, Macro-F1 tracking, early stopping, and best state restoration
+    during TransformerSentimentTrainer.fit().
+    """
+    class MockTokenizer:
+        def __init__(self, vocab_size=50):
+            self.vocab_size = vocab_size
+
+        def __call__(self, text, truncation=True, padding="max_length", max_length=16, return_tensors="pt"):
+            tokens = [hash(w) % (self.vocab_size - 2) + 1 for w in text.split()]
+            if len(tokens) > max_length:
+                tokens = tokens[:max_length]
+            else:
+                tokens = tokens + [0] * (max_length - len(tokens))
+            mask = [1 if t != 0 else 0 for t in tokens]
+            return {
+                "input_ids": torch.tensor([tokens], dtype=torch.long),
+                "attention_mask": torch.tensor([mask], dtype=torch.long),
+            }
+
+    config = BertConfig(
+        vocab_size=50,
+        hidden_size=16,
+        num_hidden_layers=1,
+        num_attention_heads=2,
+        intermediate_size=32,
+        num_labels=3,
+    )
+    trainer = TransformerSentimentTrainer(
+        model_name_or_path="mock-bert",
+        num_labels=3,
+        epochs=5,
+        batch_size=2,
+        device="cpu",
+    )
+    trainer.initialize_model(custom_config=config)
+    trainer.tokenizer = MockTokenizer()
+
+    X_train = ["यो राम्रो छ", "यो नराम्रो छ", "काठमाडौं सफा छ", "यो सामान्य छ"]
+    y_train = [2, 0, 1, 1]
+    X_val = ["राम्रो लाग्यो", "नराम्रो लाग्यो"]
+    y_val = [2, 0]
+
+    trainer.fit(X_train, y_train, X_val=X_val, y_val=y_val, patience=1)
+
+    assert "history" in trainer.metadata
+    history = trainer.metadata["history"]
+    assert len(history) >= 1
+    # Early stopping should trigger before all 5 epochs when validation metrics plateau
+    assert len(history) < 5
+    assert "best_val_macro_f1" in trainer.metadata
+    assert "val_macro_f1" in history[0]
+
+
 

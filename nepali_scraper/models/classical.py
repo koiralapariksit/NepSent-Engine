@@ -32,6 +32,7 @@ from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 
 from nepali_scraper.config import PROJECT_ROOT, SCHEMA_VERSION, LABEL_SCHEMA
+from nepali_scraper.processors import normalize_nepali_unicode
 
 logger = logging.getLogger(__name__)
 
@@ -96,14 +97,16 @@ class MajorityBaselineClassifier:
         """Predict majority class for all inputs."""
         if self.majority_class_ is None:
             raise RuntimeError("Model is not fitted. Call fit() before predict().")
-        return np.full(len(X), self.majority_class_, dtype=int)
+        X_norm = [normalize_nepali_unicode(x) for x in X]
+        return np.full(len(X_norm), self.majority_class_, dtype=int)
     
     def predict_proba(self, X: List[str]) -> np.ndarray:
         """Output empirical training class priors as probability distribution."""
         if not self.class_priors_:
             raise RuntimeError("Model is not fitted. Call fit() before predict_proba().")
+        X_norm = [normalize_nepali_unicode(x) for x in X]
         probs = [self.class_priors_.get(c, 0.0) for c in self.classes_]
-        return np.tile(probs, (len(X), 1))
+        return np.tile(probs, (len(X_norm), 1))
     
     def save(self, path: Union[str, Path]) -> Path:
         """Save model parameters and metadata JSON to disk."""
@@ -272,24 +275,23 @@ class TfidfLinearModel:
         """Predict labels for input texts."""
         if self.pipeline is None:
             raise RuntimeError("Model is not fitted. Call fit() before predict().")
-        return self.pipeline.predict(X)
+        X_norm = [normalize_nepali_unicode(x) for x in X]
+        return self.pipeline.predict(X_norm)
     
     def predict_proba(self, X: List[str]) -> np.ndarray:
         """Predict class probabilities."""
         if self.pipeline is None:
             raise RuntimeError("Model is not fitted. Call fit() before predict_proba().")
+        X_norm = [normalize_nepali_unicode(x) for x in X]
         if hasattr(self.pipeline, "predict_proba"):
-            return self.pipeline.predict_proba(X)
+            return self.pipeline.predict_proba(X_norm)
         
         # Calibrated fallback if base LinearSVC was used without CalibratedClassifierCV
-        decision = self.pipeline.decision_function(X)
+        decision = self.pipeline.decision_function(X_norm)
         if decision.ndim == 1:
             decision = np.vstack([-decision, decision]).T
         exp_d = np.exp(decision - np.max(decision, axis=1, keepdims=True))
         return exp_d / exp_d.sum(axis=1, keepdims=True)
-        if self.pipeline is None:
-            raise RuntimeError("Model is not fitted. Call fit() before predict_proba().")
-        return self.pipeline.predict_proba(X)
     
     def save(self, path: Union[str, Path]) -> Path:
         """Save pipeline and metadata JSON to disk."""
@@ -334,9 +336,9 @@ class TfidfLinearModel:
         return model
 
 
-class SubwordFastTextClassifier:
+class SubwordTfidfClassifier:
     """
-    Level 2: Subword Character N-Gram Classifier (fastText architecture equivalent).
+    Level 2: Subword Character N-Gram Classifier (honest TF-IDF subword bag model).
     
     Extracts character 3-6 n-grams into a sublinear bag-of-ngrams representation
     with L2 regularized logistic regression, running reliably across Windows and Linux
@@ -359,7 +361,7 @@ class SubwordFastTextClassifier:
         self.pipeline: Optional[Pipeline] = None
         
         self.metadata: Dict[str, Any] = {
-            "model_type": "SubwordFastTextClassifier",
+            "model_type": "SubwordTfidfClassifier",
             "schema_version": SCHEMA_VERSION,
             "min_ngram": min_ngram,
             "max_ngram": max_ngram,
@@ -371,13 +373,13 @@ class SubwordFastTextClassifier:
             "model_size_bytes": 0,
         }
     
-    def fit(self, X: List[str], y: List[int]) -> "SubwordFastTextClassifier":
-        """Fit subword n-gram fastText pipeline."""
+    def fit(self, X: List[str], y: List[int]) -> "SubwordTfidfClassifier":
+        """Fit subword n-gram pipeline."""
         start_time = time.perf_counter()
         
         y_int = np.array([int(val) for val in y], dtype=int)
         
-        # fastText subword formulation: sublinear TF-IDF of character n-grams (3 to 6)
+        # Subword formulation: sublinear TF-IDF of character n-grams (3 to 6)
         subword_vectorizer = TfidfVectorizer(
             analyzer="char",
             ngram_range=(self.min_ngram, self.max_ngram),
@@ -414,23 +416,27 @@ class SubwordFastTextClassifier:
         """Predict labels using subword representations."""
         if self.pipeline is None:
             raise RuntimeError("Model is not fitted. Call fit() before predict().")
-        return self.pipeline.predict(X)
+        X_norm = [normalize_nepali_unicode(x) for x in X]
+        return self.pipeline.predict(X_norm)
     
     def predict_proba(self, X: List[str]) -> np.ndarray:
         """Predict class probabilities."""
         if self.pipeline is None:
             raise RuntimeError("Model is not fitted. Call fit() before predict_proba().")
-        return self.pipeline.predict_proba(X)
+        X_norm = [normalize_nepali_unicode(x) for x in X]
+        return self.pipeline.predict_proba(X_norm)
     
     def save(self, path: Union[str, Path]) -> Path:
         """Save model checkpoint and metadata JSON to disk."""
         save_dir = Path(path).resolve()
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        weights_file = save_dir / "fasttext_model.joblib"
+        weights_file = save_dir / "subword_model.joblib"
+        compat_file = save_dir / "fasttext_model.joblib"
         metadata_file = save_dir / "metadata.json"
         
         joblib.dump(self.pipeline, weights_file)
+        joblib.dump(self.pipeline, compat_file)
         self.metadata["model_size_bytes"] = weights_file.stat().st_size
         
         with open(metadata_file, "w", encoding="utf-8") as f:
@@ -439,14 +445,16 @@ class SubwordFastTextClassifier:
         return save_dir
     
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "SubwordFastTextClassifier":
+    def load(cls, path: Union[str, Path]) -> "SubwordTfidfClassifier":
         """Load saved checkpoint and metadata."""
         load_dir = Path(path).resolve()
-        weights_file = load_dir / "fasttext_model.joblib"
+        weights_file = load_dir / "subword_model.joblib"
+        if not weights_file.is_file():
+            weights_file = load_dir / "fasttext_model.joblib"  # Backward compatibility
         metadata_file = load_dir / "metadata.json"
         
         if not weights_file.is_file():
-            raise FileNotFoundError(f"Missing weights file: {weights_file}")
+            raise FileNotFoundError(f"Missing weights file in {load_dir}")
         
         meta = {}
         if metadata_file.is_file():
@@ -463,4 +471,8 @@ class SubwordFastTextClassifier:
         model.pipeline = joblib.load(weights_file)
         model.metadata = meta
         return model
+
+
+# Backward-compatible alias
+SubwordFastTextClassifier = SubwordTfidfClassifier
 

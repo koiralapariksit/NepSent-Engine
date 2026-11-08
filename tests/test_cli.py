@@ -241,3 +241,23 @@ def test_cli_predict_untrained_checkpoint_blocked(tmp_path):
         
     with pytest.raises(FileNotFoundError, match="Untrained / Demo Mode Blocked"):
         load_trained_model(empty_dir)
+
+
+def test_cli_ingest_zero_records_fails(tmp_path):
+    """
+    STRICT RESEARCH INVARIANT TEST:
+    `nepsent ingest` must fail with non-zero exit code if 0 valid records are processed.
+    """
+    empty_file = tmp_path / "empty_input.jsonl"
+    empty_file.write_text("", encoding="utf-8")
+    output_file = tmp_path / "out.jsonl"
+    
+    test_args = [
+        "nepsent", "ingest",
+        "--input", str(empty_file),
+        "--output", str(output_file),
+    ]
+    with patch("sys.argv", test_args):
+        exit_code = main()
+        assert exit_code != 0
+

@@ -66,3 +66,18 @@ def test_import_produces_no_stdout_pollution(capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
 
+
+def test_canonical_domains_registry():
+    """Verify CANONICAL_DOMAINS tuple contains the 4 strict canonical domains."""
+    expected = ("news_editorial", "ecommerce_reviews", "social_comments", "general_unclassified")
+    assert config.CANONICAL_DOMAINS == expected
+
+
+def test_init_project_directories_callable():
+    """Verify init_project_directories can be called without error."""
+    config.init_project_directories()
+    assert config.DATA_DIR.is_dir()
+    assert config.LOGS_DIR.is_dir()
+    assert config.CHECKPOINTS_DIR.is_dir()
+
+

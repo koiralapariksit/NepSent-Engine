@@ -25,13 +25,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from sklearn.metrics import f1_score
 from transformers import (
     AutoConfig,
     AutoTokenizer,
     AutoModelForSequenceClassification,
+    get_linear_schedule_with_warmup,
 )
 
 from nepali_scraper.config import PROJECT_ROOT, SCHEMA_VERSION, LABEL_SCHEMA
+from nepali_scraper.processors import normalize_nepali_unicode
 
 logger = logging.getLogger(__name__)
 
@@ -186,28 +189,58 @@ class TransformerSentimentTrainer:
         y_train: List[int],
         X_val: Optional[List[str]] = None,
         y_val: Optional[List[int]] = None,
+        patience: int = 3,
+        warmup_ratio: float = 0.1,
     ) -> "TransformerSentimentTrainer":
-        """Fine-tune the transformer backbone with AdamW and linear scheduling."""
+        """
+        Fine-tune transformer with AdamW, linear warmup with decay, and validation early stopping.
+        
+        Evaluates X_val, y_val at each epoch end for validation loss and Macro-F1.
+        Snapshots best model weights in CPU memory on Macro-F1 improvement and restores
+        best weights upon training completion.
+        """
         if self.model is None or self.tokenizer is None:
             self.initialize_model()
             
         start_time = time.perf_counter()
         set_seed(self.seed)
         
-        train_dataset = SentimentTextDataset(X_train, y_train, self.tokenizer, self.max_length)
+        # Invariant A1: Normalize training texts
+        X_train_norm = [normalize_nepali_unicode(t) for t in X_train]
+        train_dataset = SentimentTextDataset(X_train_norm, y_train, self.tokenizer, self.max_length)
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        
+        # Set up validation loader if validation data provided
+        val_loader = None
+        has_val = X_val is not None and y_val is not None and len(X_val) > 0
+        if has_val:
+            X_val_norm = [normalize_nepali_unicode(t) for t in X_val]
+            val_dataset = SentimentTextDataset(X_val_norm, y_val, self.tokenizer, self.max_length)
+            val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+        
+        total_training_steps = max(1, len(train_loader) * self.epochs)
+        warmup_steps = int(total_training_steps * warmup_ratio)
         
         optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
         )
-        
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_training_steps,
+        )
         loss_fn = nn.CrossEntropyLoss()
         
-        self.model.train()
+        best_val_macro_f1 = -1.0
+        best_state_dict = None
+        patience_counter = 0
+        history: List[Dict[str, Any]] = []
+        
         for epoch in range(self.epochs):
-            total_loss = 0.0
+            self.model.train()
+            total_train_loss = 0.0
             for batch in train_loader:
                 optimizer.zero_grad()
                 input_ids = batch["input_ids"].to(self.device)
@@ -215,34 +248,91 @@ class TransformerSentimentTrainer:
                 labels = batch["labels"].to(self.device)
                 
                 outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-                logits = outputs.logits
-                loss = loss_fn(logits, labels)
-                
+                loss = loss_fn(outputs.logits, labels)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 optimizer.step()
+                scheduler.step()
                 
-                total_loss += loss.item()
+                total_train_loss += loss.item()
                 
-            avg_loss = total_loss / max(1, len(train_loader))
-            logger.info(f"Epoch {epoch + 1}/{self.epochs} - Training Loss: {avg_loss:.4f}")
+            avg_train_loss = total_train_loss / max(1, len(train_loader))
+            epoch_metrics = {
+                "epoch": epoch + 1,
+                "train_loss": round(avg_train_loss, 4),
+            }
+            
+            # Validation loop at epoch end
+            if val_loader is not None:
+                self.model.eval()
+                val_loss_total = 0.0
+                all_val_preds = []
+                all_val_targets = []
+                
+                with torch.no_grad():
+                    for vbatch in val_loader:
+                        v_input_ids = vbatch["input_ids"].to(self.device)
+                        v_attention = vbatch["attention_mask"].to(self.device)
+                        v_labels = vbatch["labels"].to(self.device)
+                        
+                        v_out = self.model(input_ids=v_input_ids, attention_mask=v_attention)
+                        v_loss = loss_fn(v_out.logits, v_labels)
+                        val_loss_total += v_loss.item()
+                        
+                        preds = torch.argmax(v_out.logits, dim=-1).cpu().numpy()
+                        all_val_preds.extend(preds)
+                        all_val_targets.extend(v_labels.cpu().numpy())
+                        
+                avg_val_loss = val_loss_total / max(1, len(val_loader))
+                val_macro_f1 = float(f1_score(all_val_targets, all_val_preds, average="macro", zero_division=0))
+                
+                epoch_metrics["val_loss"] = round(avg_val_loss, 4)
+                epoch_metrics["val_macro_f1"] = round(val_macro_f1, 4)
+                logger.info(
+                    f"Epoch {epoch + 1}/{self.epochs} - Train Loss: {avg_train_loss:.4f} - "
+                    f"Val Loss: {avg_val_loss:.4f} - Val Macro-F1: {val_macro_f1:.4f}"
+                )
+                
+                # In-memory CPU snapshot on Macro-F1 improvement
+                if val_macro_f1 > best_val_macro_f1:
+                    best_val_macro_f1 = val_macro_f1
+                    best_state_dict = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    if patience_counter >= patience:
+                        logger.info(f"Early stopping triggered at epoch {epoch + 1} (patience={patience})")
+                        history.append(epoch_metrics)
+                        break
+            else:
+                logger.info(f"Epoch {epoch + 1}/{self.epochs} - Train Loss: {avg_train_loss:.4f}")
+                
+            history.append(epoch_metrics)
+            
+        # Restore best weights if validation was performed
+        if best_state_dict is not None:
+            self.model.load_state_dict(best_state_dict)
+            self.model.to(self.device)
+            self.metadata["best_val_macro_f1"] = round(best_val_macro_f1, 4)
             
         self.metadata["training_time_sec"] = round(time.perf_counter() - start_time, 4)
         self.metadata["training_samples"] = len(X_train)
+        self.metadata["history"] = history
         
         # Profile inference latency
-        sample_subset = X_train[:min(len(X_train), 20)]
+        sample_subset = X_train_norm[:min(len(X_train_norm), 20)]
         self.metadata["inference_latency_ms"] = self.measure_inference_latency(sample_subset)
         
         return self
     
     def predict_proba(self, texts: List[str]) -> np.ndarray:
-        """Output softmax class probabilities."""
+        """Output softmax class probabilities with Unicode NFC normalized input."""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model or tokenizer is not initialized.")
             
         self.model.eval()
-        dataset = SentimentTextDataset(texts, None, self.tokenizer, self.max_length)
+        texts_norm = [normalize_nepali_unicode(t) for t in texts]
+        dataset = SentimentTextDataset(texts_norm, None, self.tokenizer, self.max_length)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
         
         all_probs = []
@@ -254,11 +344,13 @@ class TransformerSentimentTrainer:
                 probs = torch.softmax(outputs.logits, dim=-1).cpu().numpy()
                 all_probs.append(probs)
                 
-        return np.vstack(all_probs)
+        return np.vstack(all_probs) if all_probs else np.empty((0, self.num_labels))
     
     def predict(self, texts: List[str]) -> np.ndarray:
-        """Predict integer class labels (0, 1, 2)."""
+        """Predict integer class labels (0, 1, 2) with Unicode NFC normalized input."""
         probs = self.predict_proba(texts)
+        if probs.size == 0:
+            return np.empty(0, dtype=int)
         return np.argmax(probs, axis=-1)
     
     def measure_inference_latency(self, texts: List[str], repeats: int = 2) -> float:
@@ -294,15 +386,36 @@ class TransformerSentimentTrainer:
     
     @classmethod
     def load(cls, path: Union[str, Path], device: Optional[str] = None) -> "TransformerSentimentTrainer":
-        """Load fine-tuned checkpoint from disk."""
-        load_dir = Path(path).resolve()
-        manifest_file = load_dir / "training_manifest.json"
+        """
+        Load fine-tuned transformer checkpoint and manifest from disk.
         
+        Restores model weights, tokenizer, and schema_version: '2.0-ordinal' label mappings.
+        Raises FileNotFoundError if checkpoint directory or weights do not exist.
+        Raises ValueError if checkpoint is corrupt or unreadable.
+        """
+        load_dir = Path(path).resolve()
+        if not load_dir.is_dir():
+            raise FileNotFoundError(f"Transformer checkpoint directory not found: {load_dir}")
+            
+        manifest_file = load_dir / "training_manifest.json"
+        config_file = load_dir / "config.json"
+        
+        if not manifest_file.is_file() and not config_file.is_file():
+            raise FileNotFoundError(f"Missing model weights or manifest in checkpoint: {load_dir}")
+            
         meta = {}
         if manifest_file.is_file():
-            with open(manifest_file, "r", encoding="utf-8") as f:
-                meta = json.load(f)
+            try:
+                with open(manifest_file, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except Exception as e:
+                raise ValueError(f"Corrupt manifest file {manifest_file}: {e}") from e
                 
+        # Validate schema version
+        schema = meta.get("schema_version", SCHEMA_VERSION)
+        if schema != SCHEMA_VERSION:
+            logger.warning(f"Checkpoint schema '{schema}' differs from active '{SCHEMA_VERSION}'")
+            
         hparams = meta.get("hyperparameters", {})
         trainer = cls(
             model_name_or_path=str(load_dir),
@@ -312,9 +425,13 @@ class TransformerSentimentTrainer:
             seed=hparams.get("seed", 42),
             device=device,
         )
-        trainer.tokenizer = AutoTokenizer.from_pretrained(str(load_dir))
-        trainer.model = AutoModelForSequenceClassification.from_pretrained(str(load_dir))
-        trainer.model.to(trainer.device)
+        try:
+            trainer.tokenizer = AutoTokenizer.from_pretrained(str(load_dir))
+            trainer.model = AutoModelForSequenceClassification.from_pretrained(str(load_dir))
+            trainer.model.to(trainer.device)
+        except Exception as e:
+            raise ValueError(f"Failed to load transformer model/tokenizer from {load_dir}: {e}") from e
+            
         trainer.metadata = meta
         return trainer
 

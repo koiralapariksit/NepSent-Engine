@@ -15,9 +15,23 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 TESTS_DIR = PROJECT_ROOT / "tests"
 CHECKPOINTS_DIR = PROJECT_ROOT / "checkpoints"
 
-# Ensure core runtime directories exist
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
+# Canonical genre domains registry (strict tuple)
+CANONICAL_DOMAINS = (
+    "news_editorial",
+    "ecommerce_reviews",
+    "social_comments",
+    "general_unclassified",
+)
+
+
+def init_project_directories() -> None:
+    """
+    Ensure core runtime directories exist without side effects on module import.
+    Should be called explicitly during CLI or application startup.
+    """
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
 # DATA COLLECTION TARGETS

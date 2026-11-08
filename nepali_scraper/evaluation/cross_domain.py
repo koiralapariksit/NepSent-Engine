@@ -12,6 +12,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score
 
 from nepali_scraper.config import SCHEMA_VERSION, LABEL_SCHEMA
+from nepali_scraper.processors import compute_sentence_hash
 from nepali_scraper.evaluation.metrics import compute_classification_metrics
 
 logger = logging.getLogger("nepali_scraper.evaluation.cross_domain")
@@ -134,7 +135,34 @@ def run_lodo_evaluation(
     
     for held_out_domain in all_domains:
         train_records = [r for r in records if r[domain_key] != held_out_domain]
-        test_records = [r for r in records if r[domain_key] == held_out_domain]
+        test_records_raw = [r for r in records if r[domain_key] == held_out_domain]
+        
+        # Invariant B2: Track training domain hashes
+        train_hashes = set()
+        for r in train_records:
+            h = r.get("sha256_hash") or compute_sentence_hash(r.get(text_key, ""))
+            r["sha256_hash"] = h
+            train_hashes.add(h)
+            
+        # Invariant B2: Remove any record from held-out test domain whose hash appears in training domains
+        test_records = []
+        test_hashes = set()
+        for r in test_records_raw:
+            h = r.get("sha256_hash") or compute_sentence_hash(r.get(text_key, ""))
+            r["sha256_hash"] = h
+            if h not in train_hashes:
+                test_records.append(r)
+                test_hashes.add(h)
+            else:
+                logger.warning(
+                    f"Quarantined cross-domain duplicate hash '{h[:12]}' from test domain '{held_out_domain}'"
+                )
+                
+        # Invariant B2: Enforce strict assertion of zero cross-domain leakage
+        assert len(train_hashes.intersection(test_hashes)) == 0, (
+            f"Cross-domain duplicate leakage detected in LODO fold for domain '{held_out_domain}': "
+            f"{len(train_hashes.intersection(test_hashes))} overlapping hashes."
+        )
         
         train_texts = [r[text_key] for r in train_records]
         train_labels = [int(r[label_key]) for r in train_records]

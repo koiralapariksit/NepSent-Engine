@@ -27,6 +27,8 @@ from .processors import (
     compute_sentence_hash,
     devanagari_ratio,
     is_valid_nepali_text,
+    normalize_nepali_unicode,
+    compute_hindi_contamination_score,
 )
 
 from .collectors import (
@@ -59,6 +61,8 @@ __all__ = [
     "compute_sentence_hash",
     "devanagari_ratio",
     "is_valid_nepali_text",
+    "normalize_nepali_unicode",
+    "compute_hindi_contamination_score",
     "DatasetIngestor",
     "detect_hindi_contamination",
     "char_ngram_jaccard",
